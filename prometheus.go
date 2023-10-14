@@ -11,12 +11,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func (am *AdvancedMetrics) StartServer() {
+func (am *AdvancedMetricsModule) StartServer() {
+	if am.prometheusPort == 0 {
+		am.logger.Sugar().Infof("Using default port 6611\n")
+		am.prometheusPort = 6611
+	}
 	port := am.prometheusPort
 
 	am.logger.Sugar().Infof("Starting advanced metrics on port %d", port)
 
-	buckets := prometheus.ExponentialBuckets(0.1, 1.5, 10)
+	// buckets := prometheus.ExponentialBuckets(0.1, 1.5, 10)
 
 	am.requestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -30,7 +34,7 @@ func (am *AdvancedMetrics) StartServer() {
 		prometheus.HistogramOpts{
 			Name:    "caddy_advanced_metrics_request_duration_seconds",
 			Help:    "Latency for HTTP requests.",
-			Buckets: buckets,
+			Buckets: prometheus.DefBuckets,
 		},
 		[]string{"method", "path", "status", "host"},
 	)
@@ -60,7 +64,8 @@ func (am *AdvancedMetrics) StartServer() {
 	go http.ListenAndServe(":"+strconv.Itoa(port), nil)
 }
 
-func (am AdvancedMetrics) HandleRequest(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+func (am AdvancedMetricsHandler) HandleRequest(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+	m := am.module
 
 	// wrap the request handler
 	lrw := NewLoggingResponseWriter(w)
@@ -69,12 +74,17 @@ func (am AdvancedMetrics) HandleRequest(w http.ResponseWriter, r *http.Request, 
 	statusCode := strconv.Itoa(lrw.statusCode)
 
 	// update stats
-	am.requestsTotal.
-		WithLabelValues(r.Method, r.URL.Path, statusCode, r.Host).
-		Inc()
-	am.requestDuration.
-		WithLabelValues(r.Method, r.URL.Path, statusCode, r.Host).
-		Observe(float64(time.Since(now).Milliseconds()))
+	if am.counter {
+		m.requestsTotal.
+			WithLabelValues(r.Method, r.URL.Path, statusCode, r.Host).
+			Inc()
+	}
+
+	if am.latency {
+		m.requestDuration.
+			WithLabelValues(r.Method, r.URL.Path, statusCode, r.Host).
+			Observe(float64(time.Since(now).Milliseconds()))
+	}
 
 	// promhttp.InstrumentHandlerCounter(
 	// 	am.requestsTotal,
