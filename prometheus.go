@@ -64,26 +64,27 @@ func (am *AdvancedMetricsModule) StartServer() {
 	go http.ListenAndServe(":"+strconv.Itoa(port), nil)
 }
 
-func (am AdvancedMetricsHandler) HandleRequest(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+func (am *AdvancedMetricsHandler) HandleRequest(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	m := am.module
 
 	// wrap the request handler
 	lrw := NewLoggingResponseWriter(w)
-	now := time.Now()
+	before := time.Now()
 	err := next.ServeHTTP(lrw, r)
+	after := time.Now()
 	statusCode := strconv.Itoa(lrw.statusCode)
 
 	// update stats
-	if am.counter {
+	if am.Counter {
 		m.requestsTotal.
 			WithLabelValues(r.Method, r.URL.Path, statusCode, r.Host).
 			Inc()
 	}
 
-	if am.latency {
+	if am.Latency {
 		m.requestDuration.
 			WithLabelValues(r.Method, r.URL.Path, statusCode, r.Host).
-			Observe(float64(time.Since(now).Milliseconds()))
+			Observe(float64((after.Sub(before).Seconds())))
 	}
 
 	// promhttp.InstrumentHandlerCounter(
