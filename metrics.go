@@ -8,6 +8,8 @@ import (
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -16,7 +18,12 @@ func init() {
 }
 
 type AdvancedMetrics struct {
-	PrometheusPort int
+	prometheusPort  int
+	logger          *zap.Logger
+	requestsTotal   *prometheus.CounterVec
+	requestDuration *prometheus.HistogramVec
+	requestSize     *prometheus.SummaryVec
+	responseSize    *prometheus.SummaryVec
 }
 
 func (AdvancedMetrics) CaddyModule() caddy.ModuleInfo {
@@ -32,13 +39,6 @@ func (AdvancedMetrics) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 			return d.ArgErr()
 		}
 	}
-	return nil
-}
-
-func (am AdvancedMetrics) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	lrw := NewLoggingResponseWriter(w)
-	next.ServeHTTP(w, r)
-	HandleRequest(am.PrometheusPort, r.Method, r.URL.Path, lrw.statusCode, r.Host)
 	return nil
 }
 
@@ -62,13 +62,25 @@ func getPort(d *caddyfile.Dispenser) int {
 
 func parseAdvancedMetrics(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
 	port := getPort(h.Dispenser)
-
-	StartServer(port)
-
-	return AdvancedMetrics{PrometheusPort: port}, nil
+	am := AdvancedMetrics{prometheusPort: port}
+	return am, nil
 }
 
+func (am *AdvancedMetrics) Provision(ctx caddy.Context) error {
+	am.prometheusPort = 6611
+	am.logger = ctx.Logger()
+	am.logger.Sugar().Infof("Provisioning advanced metrics")
+	am.StartServer()
+	return nil
+}
+
+func (am AdvancedMetrics) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+	return am.HandleRequest(w, r, next)
+}
+
+// Interface guards - static test that interfaces are compliant
 var (
+	_ caddy.Provisioner           = (*AdvancedMetrics)(nil)
 	_ caddyfile.Unmarshaler       = (*AdvancedMetrics)(nil)
 	_ caddyhttp.MiddlewareHandler = (*AdvancedMetrics)(nil)
 )
