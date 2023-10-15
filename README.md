@@ -36,6 +36,8 @@ With this caddy module built on bases of [xcaddy](https://github.com/caddyserver
     # Enable advanced metrics on port 1234 (http://localhost:1234/metrics)
     advanced_metrics {
       port 1234
+      counter true # extension proposed by `aboisvert` 
+      latency true # extension proposed by `aboisvert` 
     }
 
     # Enable file server
@@ -44,7 +46,10 @@ With this caddy module built on bases of [xcaddy](https://github.com/caddyserver
 
 :8081 {
     # Enable advanced metrics (default port 6611)
-    advanced_metrics
+    advanced_metrics {
+      counter true # extension proposed by `aboisvert` 
+      latency false # extension proposed by `aboisvert` 
+    }
 
     # Enable file server
     file_server
@@ -97,6 +102,23 @@ nano /usr/lib/systemd/system/caddy.service
 ```sh
 [Service]
 ExecStart=/path/to/caddy run --config /path/to/Caddyfile
+```
+
+## Docker Build Example
+
+```dockerfile
+FROM alpine:3.18.4 AS build
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk add go=1.20.10-r0 git
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+  go install github.com/caddyserver/xcaddy/cmd/xcaddy@v0.3.5
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+  ~/go/bin/xcaddy build v2.7.5 \
+  --with github.com/greenpau/caddy-security \
+  --with github.com/aboisvert/caddy-advanced-metrics@add-latency \
+  --output dist/caddy
 ```
 
 ## Roadmap

@@ -16,5 +16,8 @@
 
 :5003 {
 	reverse_proxy :5002
-	advanced_metrics
+	advanced_metrics {
+		counter true
+		latency true
+	}
 }
