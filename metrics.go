@@ -108,6 +108,7 @@ func (am *AdvancedMetricsHandler) Provision(ctx caddy.Context) error {
 		m.logger = ctx.Logger()
 		m.logger.Sugar().Infof("Starting advanced metrics server\n")
 		m.StartServer()
+		m.started = true
 	} else {
 		m.logger.Sugar().Infof("Already started")
 	}
